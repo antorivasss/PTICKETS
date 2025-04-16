@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Gestión de Tickets</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <style>
+    body {
+      padding-top: 60px;
+    }
+    .ticket-card {
+      margin-bottom: 1rem;
+    }
+  </style>
+</head>
+<body>
+  <!-- Navbar -->
+  <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+    <div class="container-fluid">
+      <a class="navbar-brand" href="#">Gestión de Tickets</a>
+      <div class="ms-auto">
+        <span id="userEmail" class="text-white me-3"></span>
+        <button class="btn btn-outline-light btn-sm" onclick="logout()">Cerrar sesión</button>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Container -->
+  <div class="container">
+    <div id="loginView" class="d-none">
+      <h3>Login / Registro</h3>
+      <input type="email" id="email" class="form-control my-2" placeholder="Email" />
+      <input type="password" id="password" class="form-control my-2" placeholder="Contraseña" />
+      <button class="btn btn-primary" onclick="login()">Iniciar sesión</button>
+      <button class="btn btn-secondary" onclick="register()">Registrarse</button>
+    </div>
+
+    <div id="dashboardView" class="d-none">
+      <h3>Dashboard</h3>
+      <button class="btn btn-success mb-3" onclick="showCreateTicketForm()">Crear Ticket</button>
+      <div id="ticketList" class="row"></div>
+    </div>
+
+    <div id="createTicketView" class="d-none">
+      <h4>Nuevo Ticket</h4>
+      <input type="text" id="ticketTitle" class="form-control my-2" placeholder="Título del ticket" />
+      <textarea id="ticketDescription" class="form-control my-2" placeholder="Descripción"></textarea>
+      <select id="ticketPriority" class="form-select my-2">
+        <option value="Alta">Alta</option>
+        <option value="Media">Media</option>
+        <option value="Baja">Baja</option>
+      </select>
+      <input type="text" id="ticketTipo" class="form-control my-2" placeholder="Tipo de pedido (Ej: Pedido de empaques para lote 1234)" />
+      <button class="btn btn-primary" onclick="createTicket()">Guardar</button>
+      <button class="btn btn-secondary" onclick="showDashboard()">Cancelar</button>
+    </div>
+  </div>
+
+  <!-- Firebase SDK y App JS -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js";
+    import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js";
+    import { getFirestore, collection, addDoc, getDocs } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyCRH2pjhYe0rx9Y89JoBOIqn49YwvhpnEY",
+      authDomain: "pruebaanto-a9eb9.firebaseapp.com",
+      projectId: "pruebaanto-a9eb9",
+      storageBucket: "pruebaanto-a9eb9.firebasestorage.app",
+      messagingSenderId: "656147738307",
+      appId: "1:656147738307:web:fab26fdb057df652b2bc76"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+
+    const loginView = document.getElementById("loginView");
+    const dashboardView = document.getElementById("dashboardView");
+    const createTicketView = document.getElementById("createTicketView");
+    const ticketList = document.getElementById("ticketList");
+    const userEmail = document.getElementById("userEmail");
+
+    function showLogin() {
+      loginView.classList.remove("d-none");
+      dashboardView.classList.add("d-none");
+      createTicketView.classList.add("d-none");
+    }
+
+    function showDashboard() {
+      loginView.classList.add("d-none");
+      dashboardView.classList.remove("d-none");
+      createTicketView.classList.add("d-none");
+      loadTickets();
+    }
+
+    function showCreateTicketForm() {
+      loginView.classList.add("d-none");
+      dashboardView.classList.add("d-none");
+      createTicketView.classList.remove("d-none");
+    }
+
+    async function createTicket() {
+      const title = document.getElementById("ticketTitle").value;
+      const description = document.getElementById("ticketDescription").value;
+      const priority = document.getElementById("ticketPriority").value;
+      const tipo = document.getElementById("ticketTipo").value;
+
+      await addDoc(collection(db, "tickets"), {
+        title,
+        description,
+        priority,
+        tipo,
+        status: "Pendiente",
+        date: new Date().toISOString(),
+        user: auth.currentUser.email
+      });
+
+      Swal.fire("Ticket creado", "Tu ticket ha sido guardado con éxito", "success");
+      showDashboard();
+    }
+
+    async function loadTickets() {
+      ticketList.innerHTML = "";
+      const querySnapshot = await getDocs(collection(db, "tickets"));
+      querySnapshot.forEach((doc) => {
+        const t = doc.data();
+        ticketList.innerHTML += `
+          <div class="col-md-4">
+            <div class="card ticket-card">
+              <div class="card-body">
+                <h5 class="card-title">${t.title}</h5>
+                <p class="card-text">${t.description}</p>
+                <p><strong>Prioridad:</strong> ${t.priority}</p>
+                <p><strong>Tipo:</strong> ${t.tipo}</p>
+                <p><strong>Estado:</strong> ${t.status}</p>
+                <p><small>${new Date(t.date).toLocaleString()}</small></p>
+              </div>
+            </div>
+          </div>
+        `;
+      });
+    }
+
+    window.login = async function () {
+      const email = document.getElementById("email").value;
+      const password = document.getElementById("password").value;
+      try {
+        await signInWithEmailAndPassword(auth, email, password);
+      } catch (e) {
+        Swal.fire("Error", e.message, "error");
+      }
+    }
+
+    window.register = async function () {
+      const email = document.getElementById("email").value;
+      const password = document.getElementById("password").value;
+      try {
+        await createUserWithEmailAndPassword(auth, email, password);
+        Swal.fire("Registro exitoso", "Ya puedes iniciar sesión", "success");
+      } catch (e) {
+        Swal.fire("Error", e.message, "error");
+      }
+    }
+
+    window.logout = function () {
+      signOut(auth);
+    }
+
+    onAuthStateChanged(auth, (user) => {
+      if (user) {
+        userEmail.textContent = user.email;
+        showDashboard();
+      } else {
+        userEmail.textContent = "";
+        showLogin();
+      }
+    });
+  </script>
+</body>
+</html>
